@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">VOR - Verdad o Reto</string>
+    <string name="title_activity_main">VOR - Verdad o Reto</string>
+    <string name="package_name">com.batallagroup.vor</string>
+    <string name="custom_url_scheme">com.batallagroup.vor</string>
+</resources>
