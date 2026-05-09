@@ -1,8 +1,33 @@
+# Dependencies
 node_modules/
-build/
+
+# Build output
 dist/
-coverage/
+
+# Android build artifacts
+android/.gradle/
+android/app/build/
+android/build/
+android/.idea/
+android/local.properties
+
+# Capacitor
+.capacitor/
+
+# Environment variables (NEVER subir al repo)
+.env
+.env.local
+.env.*.local
+
+# Keys & certificates (NUNCA subir)
+*.keystore
+*.jks
+*.p12
+
+# OS
 .DS_Store
-*.log
-.env*
-!.env.example
+Thumbs.db
+
+# Editor
+.vscode/
+*.swp
