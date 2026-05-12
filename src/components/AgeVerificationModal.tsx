@@ -62,7 +62,8 @@ export function AgeVerificationModal({ onConfirm, onCancel }: AgeVerificationMod
       >
         <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-pink-500 to-transparent opacity-50" />
 
-        <div className="flex flex-col items-center text-center gap-6">
+        <
+        div className="flex flex-col items-center text-center gap-6">
           <div className="w-20 h-20 rounded-full bg-pink-500/10 flex items-center justify-center border-2 border-pink-500/20">
             <ShieldAlert className="w-10 h-10 text-pink-500" />
           </div>
