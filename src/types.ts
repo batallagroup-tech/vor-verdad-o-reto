@@ -33,7 +33,7 @@ export interface GameState {
   intensity: Intensity;
   currentTurn: number;
   history: string[];
-  isTTS: boolean;
+
   language: string;
   allowedPairings: string[]; // e.g., ["MF", "MM", "FF"]
 }

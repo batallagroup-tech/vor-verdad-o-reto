@@ -173,18 +173,6 @@ export default function App() {
     } catch (_) {}
   };
 
-  // ── TTS ───────────────────────────────────────────────────────────────────
-  const speak = useCallback(
-    (text: string) => {
-      if (!isTTS) return;
-      window.speechSynthesis.cancel();
-      const utt = new SpeechSynthesisUtterance(text);
-      utt.lang = 'es-ES';
-      window.speechSynthesis.speak(utt);
-    },
-    [isTTS]
-  );
-
   // ── Players ───────────────────────────────────────────────────────────────
   const addPlayer = (name: string, gender: 'male' | 'female') => {
     if (!name.trim()) return;
@@ -256,7 +244,6 @@ export default function App() {
       );
       setCurrentChallenge(challenge);
       setHistory((prev) => [...prev, challenge.id ?? challenge.text]);
-      speak(`${player.name}, ${type === 'truth' ? t('truth') : t('dare')}: ${challenge.text}`);
 
       // Confetti on dare
       if (type === 'dare') {
@@ -275,7 +262,6 @@ export default function App() {
         isFallback: true,
       };
       setCurrentChallenge(fallback);
-      speak(`${player.name}, ${type === 'truth' ? t('truth') : t('dare')}: ${fallback.text}`);
     } finally {
       setLoading(false);
     }
@@ -428,7 +414,7 @@ export default function App() {
               shareChallenge={shareChallenge}
               startTimer={startTimer}
               setShowPunishment={setShowPunishment}
-              speak={speak}
+
               t={t}
             />
           )}
@@ -492,5 +478,7 @@ export default function App() {
     </div>
   );
 }
+
+
 
 

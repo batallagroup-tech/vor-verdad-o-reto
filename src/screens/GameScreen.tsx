@@ -24,7 +24,7 @@ interface GameScreenProps {
   shareChallenge: () => void;
   startTimer: () => void;
   setShowPunishment: (show: boolean) => void;
-  speak: (text: string) => void;
+
   t: (key: string) => string;
 }
 
@@ -44,7 +44,7 @@ export function GameScreen({
   shareChallenge,
   startTimer,
   setShowPunishment,
-  speak,
+
   t,
 }: GameScreenProps) {
   const player = players[turnIndex];
@@ -241,7 +241,6 @@ export function GameScreen({
                 onClick={() => {
                   hapticFeedback([60, 40, 60]);
                   setShowPunishment(true);
-                  speak(`${t('punishment')} ${currentChallenge.punishment}`);
                 }}
                 className="w-full py-3 bg-red-500/10 text-red-500 border border-red-500/20 rounded-full font-black text-base text-center"
               >
