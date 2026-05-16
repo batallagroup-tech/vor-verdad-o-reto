@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
-import { Settings, Volume2, VolumeX } from 'lucide-react';
+import { Settings } from 'lucide-react';
 import { Player, GameMode, Intensity, Challenge } from './types';
 import { OFFLINE_CHALLENGES } from './constants';
 import { fetchChallenge } from './services/challengeService';
@@ -101,7 +101,7 @@ export default function App() {
   const [intensity, setIntensity] = useState<Intensity>('medium');
   const [turnIndex, setTurnIndex] = useState(0);
   const [history, setHistory] = useState<string[]>([]);
-  const [isTTS, setIsTTS] = useState(false);
+
   const [allowedPairings, setAllowedPairings] = useState<string[]>([]);
   const [currentChallenge, setCurrentChallenge] = useState<Challenge | null>(null);
   const [showPunishment, setShowPunishment] = useState(false);
@@ -351,12 +351,6 @@ export default function App() {
             </div>
             <div className="flex gap-2">
               <button
-                onClick={() => { hapticFeedback(10); setIsTTS((v) => !v); }}
-                className="p-3 rounded-full bg-white/5 hover:bg-white/10 transition-all border border-white/10"
-              >
-                {isTTS ? <Volume2 className="w-5 h-5 text-pink-400" /> : <VolumeX className="w-5 h-5 text-slate-400" />}
-              </button>
-              <button
                 onClick={() => { hapticFeedback(20); setShowSettings(true); }}
                 className="p-3 rounded-full bg-white/5 hover:bg-white/10 transition-all border border-white/10"
               >
@@ -498,3 +492,5 @@ export default function App() {
     </div>
   );
 }
+
+

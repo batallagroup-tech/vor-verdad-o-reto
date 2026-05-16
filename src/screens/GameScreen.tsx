@@ -2,7 +2,7 @@ import React from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { ArrowLeft, Share2, RotateCcw } from 'lucide-react';
 import { Player, GameMode, Intensity, Challenge } from '../types';
-import UnityAdsBanner from '../components/UnityAdsBanner';
+import AdMobBanner from '../components/AdMobBanner';
 
 const hapticFeedback = (pattern: number | number[] = 10) => {
   if (typeof navigator !== 'undefined' && navigator.vibrate) navigator.vibrate(pattern);
@@ -119,7 +119,7 @@ export function GameScreen({
             </div>
           )}
 
-          <UnityAdsBanner />
+          <AdMobBanner />
         </div>
       ) : (
         /* ── Challenge Card ── */
@@ -259,9 +259,10 @@ export function GameScreen({
             )}
           </div>
 
-          <UnityAdsBanner />
+          <AdMobBanner />
         </motion.div>
       )}
     </motion.div>
   );
 }
+

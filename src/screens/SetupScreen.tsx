@@ -3,7 +3,7 @@ import { motion } from 'motion/react';
 import { Trash2, ChevronRight } from 'lucide-react';
 import { Player } from '../types';
 import { PlayerInput } from '../components/PlayerInput';
-import UnityAdsBanner from '../components/UnityAdsBanner';
+import AdMobBanner from '../components/AdMobBanner';
 
 const hapticFeedback = (pattern: number | number[] = 10) => {
   if (typeof navigator !== 'undefined' && navigator.vibrate) {
@@ -71,8 +71,9 @@ export function SetupScreen({ players, addPlayer, removePlayer, onNext, t }: Set
           {t('next')} <ChevronRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
         </button>
         <div className="h-4" />
-        <UnityAdsBanner />
+        <AdMobBanner />
       </div>
     </motion.div>
   );
 }
+

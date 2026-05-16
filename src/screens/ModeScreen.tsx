@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { ArrowLeft, Check, Flame, ChevronRight } from 'lucide-react';
 import { GameMode } from '../types';
 import { GAME_MODES } from '../constants';
-import UnityAdsBanner from '../components/UnityAdsBanner';
+import AdMobBanner from '../components/AdMobBanner';
 
 const hapticFeedback = (pattern: number | number[] = 10) => {
   if (typeof navigator !== 'undefined' && navigator.vibrate) {
@@ -156,8 +156,9 @@ export function ModeScreen({
           {t('next')} <ChevronRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
         </button>
         <div className="h-4" />
-        <UnityAdsBanner />
+        <AdMobBanner />
       </div>
     </motion.div>
   );
 }
+

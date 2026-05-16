@@ -1,7 +1,7 @@
 import React from 'react';
 import { motion } from 'motion/react';
 import { ArrowLeft, User, Check, ChevronRight } from 'lucide-react';
-import UnityAdsBanner from '../components/UnityAdsBanner';
+import AdMobBanner from '../components/AdMobBanner';
 
 const hapticFeedback = (pattern: number | number[] = 10) => {
   if (typeof navigator !== 'undefined' && navigator.vibrate) {
@@ -86,8 +86,9 @@ export function PairingsScreen({ allowedPairings, setAllowedPairings, onBack, on
           {t('next')} <ChevronRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
         </button>
         <div className="h-4" />
-        <UnityAdsBanner />
+        <AdMobBanner />
       </div>
     </motion.div>
   );
 }
+

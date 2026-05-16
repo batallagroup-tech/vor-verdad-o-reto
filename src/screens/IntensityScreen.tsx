@@ -3,7 +3,7 @@ import { motion } from 'motion/react';
 import { ArrowLeft, Play } from 'lucide-react';
 import { Intensity } from '../types';
 import { INTENSITIES } from '../constants';
-import UnityAdsBanner from '../components/UnityAdsBanner';
+import AdMobBanner from '../components/AdMobBanner';
 
 const hapticFeedback = (pattern: number | number[] = 10) => {
   if (typeof navigator !== 'undefined' && navigator.vibrate) {
@@ -70,8 +70,9 @@ export function IntensityScreen({ intensity, setIntensity, onBack, onPlay, t }: 
           <Play className="w-5 h-5 fill-current" /> {t('play')}
         </button>
         <div className="h-4" />
-        <UnityAdsBanner />
+        <AdMobBanner />
       </div>
     </motion.div>
   );
 }
+

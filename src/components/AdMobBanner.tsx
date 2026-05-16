@@ -1,14 +1,13 @@
-import React, { useEffect, useRef, useState } from 'react';
-import { getPlatformConfig, getUnityAds, isAdsReady, showBannerAd } from '../services/ads';
+﻿import React, { useEffect, useRef, useState } from 'react';
+import { initAds, showBannerAd, isAdsReady } from '../services/ads';
 
-export default function UnityAdsBanner() {
+export default function AdMobBanner() {
   const [status, setStatus] = useState<'idle' | 'loading' | 'ready' | 'error'>('idle');
   const triedRef = useRef(false);
 
   useEffect(() => {
+    initAds();
     if (triedRef.current) return;
-
-    // Poll until ads SDK is initialized (max ~10s)
     let attempts = 0;
     const interval = setInterval(() => {
       attempts++;
@@ -17,36 +16,26 @@ export default function UnityAdsBanner() {
         if (!triedRef.current) {
           triedRef.current = true;
           setStatus('loading');
-          const config = getPlatformConfig();
-          const ads = getUnityAds();
-          if (!ads) { setStatus('error'); return; }
           try {
-            ads.load(config.banner, {
-              onComplete: (id: string) => {
-                try { ads.show(id); setStatus('ready'); } catch (_) { setStatus('error'); }
-              },
-              onFailed: (_id: string, err: any, msg: string) => {
-                console.warn('Banner failed:', err, msg);
-                setStatus('error');
-              },
-            });
+            showBannerAd();
+            setStatus('ready');
           } catch (e) {
-            console.warn('Banner exception:', e);
             setStatus('error');
           }
         }
       }
-      if (attempts >= 5) clearInterval(interval); // give up after 10s
+      if (attempts >= 5) { clearInterval(interval); setStatus('error'); }
     }, 2000);
-
     return () => clearInterval(interval);
   }, []);
+
+  if (status === 'error') return null;
 
   return (
     <div className="w-full mb-4 px-2">
       <div className="w-full h-16 bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 border border-white/10 rounded-2xl flex items-center justify-center overflow-hidden relative">
         <div className="flex items-center gap-2 z-10">
-          <div className={`w-1.5 h-1.5 rounded-full animate-pulse ${status === 'ready' ? 'bg-green-500' : status === 'error' ? 'bg-red-500/50' : 'bg-pink-500/50'}`} />
+          <div className={`w-1.5 h-1.5 rounded-full animate-pulse ${status === 'ready' ? 'bg-green-500' : 'bg-pink-500/50'}`} />
           <span className="text-[9px] font-bold text-slate-500 uppercase tracking-widest">
             {status === 'ready' ? 'Anuncio activo' : 'Publicidad'}
           </span>
