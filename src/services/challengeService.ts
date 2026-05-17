@@ -1,57 +1,13 @@
 import { Player, GameMode, Intensity, Challenge } from "../types";
 import { OFFLINE_CHALLENGES } from "../constants";
+import { supabase } from "./supabase";
 
-// Import all JSON data
-import seedData from "../../challenges_seed_extreme.json";
-import seedDataV1 from "../../challenges_seed.json";
-import seedDataBeberaje from "../../challenges_seed_beberaje_extreme.json";
-import seedDataBeberajeV2 from "../../challenges_seed_beberaje_extreme_v2.json";
-import seedDataFamiliar from "../../challenges_seed_familiar.json";
-import seedDataPicante from "../../challenges_seed_picante.json";
-import seedDataPareja from "../../challenges_seed_pareja.json";
-import seedDataNinos from "../../challenges_seed_ninos.json";
-import seedDataInocente from "../../challenges_seed_inocente.json";
-import seedDataFiesta from "../../challenges_seed_fiesta.json";
-import seedDataEscuela from "../../challenges_seed_escuela.json";
-import seedDataProfundo from "../../challenges_seed_profundo.json";
-import seedDataColegas from "../../challenges_seed_colegas.json";
+// ── Caché en memoria ────────────────────────────────────────────────────────
+let cachedData: any[] = [];
+let cacheLoaded = false;
+let cacheLoading = false;
 
-const allData: any[] = [
-  ...seedData,
-  ...seedDataV1,
-  ...seedDataBeberaje,
-  ...seedDataBeberajeV2,
-  ...seedDataFamiliar,
-  ...seedDataPicante,
-  ...seedDataPareja,
-  ...seedDataNinos,
-  ...seedDataInocente,
-  ...seedDataFiesta,
-  ...seedDataEscuela,
-  ...seedDataProfundo,
-  ...seedDataColegas,
-];
-
-const intensityMap: Record<string, number> = {
-  low: 1,
-  medium: 2,
-  high: 3,
-  progressive: 4,
-  extreme: 5,
-};
-
-const stackMap: Record<string, any[]> = {};
-
-function shuffle<T>(array: T[]): T[] {
-  const arr = [...array];
-  for (let i = arr.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [arr[i], arr[j]] = [arr[j], arr[i]];
-  }
-  return arr;
-}
-
-// Castigos por modo e intensidad
+// ── Castigos por modo e intensidad ──────────────────────────────────────────
 const PUNISHMENTS: Record<string, Record<string, string[]>> = {
   drinking: {
     low:        ["Bebe 1 trago de castigo.", "Tómate medio vaso.", "Un shot de lo que tengas."],
@@ -144,18 +100,62 @@ const INTENSITY_KEYS: Record<string, string> = {
   low: "low", medium: "medium", high: "high", progressive: "progressive", extreme: "extreme",
 };
 
+const intensityMap: Record<string, number> = {
+  low: 1, medium: 2, high: 3, progressive: 4, extreme: 5,
+};
+
 function getPunishment(mode: GameMode, intensity: Intensity): string {
   const modeKey = mode.id;
   const intensityKey = INTENSITY_KEYS[String(intensityMap[intensity] ?? intensity)] ?? "medium";
-
   const modePunishments = PUNISHMENTS[modeKey] ?? PUNISHMENTS["familiar"];
-  const intensityPunishments = modePunishments[intensityKey] ?? modePunishments["medium"];
-  const options = intensityPunishments ?? ["El grupo decide tu castigo."];
-
+  const options = modePunishments[intensityKey] ?? modePunishments["medium"] ?? ["El grupo decide tu castigo."];
   return options[Math.floor(Math.random() * options.length)];
 }
 
+function shuffle<T>(array: T[]): T[] {
+  const arr = [...array];
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+  }
+  return arr;
+}
+
+// ── Cargar datos de Supabase con caché ──────────────────────────────────────
+async function loadData(): Promise<any[]> {
+  if (cacheLoaded) return cachedData;
+  if (cacheLoading) {
+    await new Promise<void>((resolve) => {
+      const interval = setInterval(() => {
+        if (!cacheLoading) { clearInterval(interval); resolve(); }
+      }, 100);
+    });
+    return cachedData;
+  }
+
+  cacheLoading = true;
+  try {
+    const { data, error } = await supabase
+      .from('retos')
+      .select('*')
+      .eq('activo', true);
+
+    if (error) throw error;
+    cachedData = data || [];
+    cacheLoaded = true;
+  } catch (e) {
+    console.warn('Supabase error, usando fallback:', e);
+    cachedData = [];
+  } finally {
+    cacheLoading = false;
+  }
+  return cachedData;
+}
+
+const stackMap: Record<string, any[]> = {};
+
 function getFilteredChallenges(
+  allData: any[],
   type: "truth" | "dare",
   mode: GameMode,
   intensity: Intensity
@@ -164,10 +164,7 @@ function getFilteredChallenges(
   const dbIntensidad = intensityMap[intensity] ?? 3;
 
   const pass1 = allData.filter(
-    (item) =>
-      item.modo === mode.name &&
-      item.tipo === dbTipo &&
-      Number(item.intensidad) === dbIntensidad
+    (item) => item.modo === mode.name && item.tipo === dbTipo && Number(item.intensidad) === dbIntensidad
   );
   if (pass1.length >= 3) return pass1;
 
@@ -176,10 +173,7 @@ function getFilteredChallenges(
   );
   if (pass2.length >= 3) return pass2;
 
-  const pass3 = allData.filter((item) => item.tipo === dbTipo);
-  if (pass3.length >= 3) return pass3;
-
-  return [];
+  return allData.filter((item) => item.tipo === dbTipo);
 }
 
 export async function fetchChallenge(
@@ -191,10 +185,11 @@ export async function fetchChallenge(
   _language: string,
   otherPlayers: Player[]
 ): Promise<Challenge> {
+  const allData = await loadData();
   const stackKey = `${type}_${mode.id}_${intensity}`;
 
   if (!stackMap[stackKey] || stackMap[stackKey].length === 0) {
-    const fresh = getFilteredChallenges(type, mode, intensity);
+    const fresh = getFilteredChallenges(allData, type, mode, intensity);
     stackMap[stackKey] = shuffle(fresh);
   }
 
@@ -214,7 +209,6 @@ export async function fetchChallenge(
   }
 
   const selectedData = stackMap[stackKey].pop()!;
-
   let finalText: string = selectedData.texto || selectedData.text || "";
 
   if (otherPlayers.length > 0) {
@@ -235,4 +229,10 @@ export async function fetchChallenge(
     punishment: getPunishment(mode, intensity),
     timer: Number(selectedData.timer) || 0,
   };
+}
+
+export function clearCache() {
+  cachedData = [];
+  cacheLoaded = false;
+  Object.keys(stackMap).forEach(k => delete stackMap[k]);
 }
