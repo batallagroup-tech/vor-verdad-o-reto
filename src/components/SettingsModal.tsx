@@ -48,7 +48,7 @@ export function SettingsModal({ onClose, onReset, onGoToSetup, t }: SettingsModa
 
         <div className="pt-4 border-t border-white/5 text-center space-y-1">
           <p className="text-[8px] font-bold text-slate-600 uppercase tracking-widest">
-            {t('version_label')}: 1.0.0
+            {t('version_label')}: 1.4.0
           </p>
           <p className="text-[8px] font-bold text-slate-600 uppercase tracking-widest">
             {t('developer_label')}

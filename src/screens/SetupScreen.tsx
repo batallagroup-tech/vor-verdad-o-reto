@@ -32,7 +32,7 @@ export function SetupScreen({ players, addPlayer, removePlayer, onNext, t }: Set
         <h2 className="text-2xl font-black mb-1">{t('setup')}</h2>
         <div className="flex justify-between items-center">
           <p className="text-slate-500 text-xs font-medium">{t('setup_desc')}</p>
-          <span className="text-[8px] font-bold text-slate-700 uppercase tracking-widest">v1.0.0</span>
+          <span className="text-[8px] font-bold text-slate-700 uppercase tracking-widest">v1.4.0</span>
         </div>
       </div>
 

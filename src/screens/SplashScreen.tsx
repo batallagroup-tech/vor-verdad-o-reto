@@ -34,7 +34,7 @@ export function SplashScreen({ t }: SplashScreenProps) {
           />
         </div>
         <p className="mt-4 text-xs font-bold text-slate-500 uppercase tracking-widest">{t('loading')}</p>
-        <p className="mt-2 text-[8px] font-black text-slate-700 tracking-tighter">v1.0.0</p>
+        <p className="mt-2 text-[8px] font-black text-slate-700 tracking-tighter">v1.4.0</p>
       </motion.div>
     </motion.div>
   );
