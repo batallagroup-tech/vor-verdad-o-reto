@@ -11,6 +11,40 @@ const intensityMap: Record<string, number> = {
   low: 1, medium: 2, high: 3, progressive: 4, extreme: 5,
 };
 
+// Mapeo de mode.id interno a nombre de modo en BD
+const MODO_MAP: Record<string, string> = {
+  drinking:  'Beberaje',
+  couples:   'Pareja',
+  fwb:       'Casual',
+  extreme:   'Extremo',
+  familiar:  'Familiar',
+  ninos:     'Niños',
+  inocente:  'Inocente',
+  fiesta:    'Fiesta',
+  escuela:   'Escuela',
+  profundo:  'Profundo',
+  colegas:   'Colegas',
+  picante:   'Picante',
+  casual:    'Sexo Casual',
+};
+
+// Mapeo de mode.id a modo en tabla castigos
+const CASTIGO_MODO_MAP: Record<string, string> = {
+  drinking:  'beberaje',
+  couples:   'parejas',
+  fwb:       'casual',
+  extreme:   'extremo',
+  familiar:  'familiar',
+  ninos:     'ninos',
+  inocente:  'inocente',
+  fiesta:    'fiesta',
+  escuela:   'escuela',
+  profundo:  'profundo',
+  colegas:   'colegas',
+  picante:   'picante',
+  casual:    'casual',
+};
+
 function shuffle<T>(array: T[]): T[] {
   const arr = [...array];
   for (let i = arr.length - 1; i > 0; i--) {
@@ -55,21 +89,17 @@ async function loadData(): Promise<void> {
 
 function getPunishment(mode: GameMode, intensity: Intensity): string {
   const intNum = intensityMap[intensity] ?? 3;
+  const modoId = CASTIGO_MODO_MAP[mode.id] ?? mode.id;
 
-  // Buscar en castigos de Supabase primero
-  const options = cachedCastigos.filter(
-    c => c.modo_id === mode.id && Number(c.intensidad) === intNum
+  // Exacto: modo + intensidad
+  const exactos = cachedCastigos.filter(
+    c => c.modo === modoId && Number(c.intensidad) === intNum
   );
+  if (exactos.length > 0) return exactos[Math.floor(Math.random() * exactos.length)].texto;
 
-  if (options.length > 0) {
-    return options[Math.floor(Math.random() * options.length)].texto;
-  }
-
-  // Fallback: buscar por intensidad sin importar modo
-  const fallback = cachedCastigos.filter(c => Number(c.intensidad) === intNum);
-  if (fallback.length > 0) {
-    return fallback[Math.floor(Math.random() * fallback.length)].texto;
-  }
+  // Fallback: solo intensidad
+  const porIntensidad = cachedCastigos.filter(c => Number(c.intensidad) === intNum);
+  if (porIntensidad.length > 0) return porIntensidad[Math.floor(Math.random() * porIntensidad.length)].texto;
 
   return 'El grupo decide tu castigo.';
 }
@@ -81,23 +111,24 @@ function getFilteredChallenges(
   mode: GameMode,
   intensity: Intensity
 ): any[] {
-  const tipoId = type === 'truth' ? 'verdad' : 'reto';
+  const tipoStr = type === 'truth' ? 'verdad' : 'reto';
+  const modoStr = MODO_MAP[mode.id] ?? mode.name;
   const intNum = intensityMap[intensity] ?? 3;
 
-  // Filtro exacto: modo_id + tipo_id + intensidad
+  // Paso 1: modo + tipo + intensidad exactos
   const pass1 = cachedRetos.filter(
-    r => r.modo_id === mode.id && r.tipo_id === tipoId && Number(r.intensidad) === intNum
+    r => r.modo === modoStr && r.tipo === tipoStr && Number(r.intensidad) === intNum
   );
   if (pass1.length >= 3) return pass1;
 
-  // Fallback 1: mismo modo y tipo, cualquier intensidad cercana
+  // Paso 2: modo + tipo, cualquier intensidad
   const pass2 = cachedRetos.filter(
-    r => r.modo_id === mode.id && r.tipo_id === tipoId
+    r => r.modo === modoStr && r.tipo === tipoStr
   );
   if (pass2.length >= 3) return pass2;
 
-  // Fallback 2: mismo tipo, cualquier modo
-  return cachedRetos.filter(r => r.tipo_id === tipoId);
+  // Paso 3: solo tipo, cualquier modo
+  return cachedRetos.filter(r => r.tipo === tipoStr);
 }
 
 export async function fetchChallenge(
