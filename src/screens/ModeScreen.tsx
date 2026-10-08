@@ -4,6 +4,7 @@ import { ArrowLeft, Check, Flame, ChevronRight } from 'lucide-react';
 import { GameMode } from '../types';
 import { GAME_MODES } from '../constants';
 import AdMobBanner from '../components/AdMobBanner';
+import { getActiveSeasonalPack, SEASONAL_PACKS } from '../services/seasonalService';
 
 const hapticFeedback = (pattern: number | number[] = 10) => {
   if (typeof navigator !== 'undefined' && navigator.vibrate) {
@@ -31,6 +32,8 @@ export function ModeScreen({
   onNext, 
   t 
 }: ModeScreenProps) {
+  const activeSeasonal = getActiveSeasonalPack();
+
   return (
     <motion.div 
       key="mode"
@@ -41,10 +44,40 @@ export function ModeScreen({
     >
       <div className="mb-4 flex items-center gap-4">
         <button onClick={onBack} className="p-2 rounded-full bg-white/5 border border-white/10"><ArrowLeft className="w-3 h-3 text-white" /></button>
-        <h2 className="text-xl font-black text-white">{t('mode_title')}</h2>
+        <div className="flex flex-col">
+          <div className="flex items-center gap-2">
+            <h2 className="text-xl font-black text-white">{t('mode_title')}</h2>
+            <span className="text-xs text-pink-400 font-medium">(puedes seleccionar más de uno)</span>
+          </div>
+          <span className="text-[10px] text-slate-400">Combina los modos que prefieras</span>
+        </div>
       </div>
 
       <div className="flex-1 overflow-y-auto pr-1 custom-scrollbar">
+        {/* Seasonal Pack Banner if Active */}
+        {activeSeasonal && (
+          <motion.div
+            initial={{ scale: 0.95, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            className="mb-4 p-3.5 rounded-2xl bg-gradient-to-r from-orange-500/20 via-pink-500/20 to-purple-500/20 border border-orange-500/40 relative overflow-hidden"
+          >
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <span className="text-2xl">{activeSeasonal.icon}</span>
+                <div className="flex flex-col text-left">
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-[9px] font-black text-orange-400 uppercase tracking-widest bg-orange-500/20 px-1.5 py-0.5 rounded">
+                      🎉 Evento de Temporada
+                    </span>
+                  </div>
+                  <span className="text-xs font-black text-white">{activeSeasonal.name}</span>
+                  <span className="text-[8px] text-slate-300 font-medium">{activeSeasonal.description}</span>
+                </div>
+              </div>
+            </div>
+          </motion.div>
+        )}
+
         <div className="mb-4">
           <h3 className="text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] mb-3 px-2">{t('family_modes')}</h3>
           <div className="space-y-2">
@@ -144,21 +177,21 @@ export function ModeScreen({
         </div>
       </div>
 
-      <div className="mt-auto pt-6">
+      <div className="mt-auto pt-6 pb-6">
         <button 
           disabled={selectedModes.length === 0}
           onClick={() => {
             hapticFeedback(30);
             onNext();
           }}
-          className="w-full py-4 bg-white text-black rounded-full font-black text-lg shadow-2xl shadow-white/10 disabled:opacity-30 flex items-center justify-center gap-2 group transition-all text-center"
+          className="w-full py-4 bg-white text-black rounded-full font-black text-lg shadow-2xl shadow-white/10 disabled:opacity-30 flex items-center justify-center gap-2 group transition-all text-center mb-6"
         >
           {t('next')} <ChevronRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
         </button>
-        <div className="h-4" />
         <AdMobBanner />
       </div>
     </motion.div>
   );
 }
+
 

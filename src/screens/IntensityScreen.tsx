@@ -59,20 +59,20 @@ export function IntensityScreen({ intensity, setIntensity, onBack, onPlay, t }: 
         ))}
       </div>
 
-      <div className="mt-auto">
+      <div className="mt-auto pt-6 pb-6">
         <button 
           onClick={() => {
             hapticFeedback(50);
             onPlay();
           }}
-          className="w-full py-4 bg-pink-500 text-white rounded-full font-black text-lg shadow-2xl shadow-pink-500/20 flex items-center justify-center gap-2 text-center"
+          className="w-full py-4 bg-pink-500 text-white rounded-full font-black text-lg shadow-2xl shadow-pink-500/20 flex items-center justify-center gap-2 text-center mb-6"
         >
           <Play className="w-5 h-5 fill-current" /> {t('play')}
         </button>
-        <div className="h-4" />
         <AdMobBanner />
       </div>
     </motion.div>
   );
 }
+
 

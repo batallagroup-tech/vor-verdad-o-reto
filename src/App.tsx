@@ -5,7 +5,7 @@ import { Player, GameMode, Intensity, Challenge } from './types';
 import { OFFLINE_CHALLENGES } from './constants';
 import { fetchChallenge } from './services/challengeService';
 import { initAds } from './services/ads';
-import confetti from 'canvas-confetti';
+import { soundService } from './services/soundService';
 
 // Screens
 import { SplashScreen } from './screens/SplashScreen';
@@ -13,11 +13,12 @@ import { SetupScreen } from './screens/SetupScreen';
 import { PairingsScreen } from './screens/PairingsScreen';
 import { ModeScreen } from './screens/ModeScreen';
 import { IntensityScreen } from './screens/IntensityScreen';
-import { GameScreen } from './screens/GameScreen';
+import { GameScreen, PlayerJokerState } from './screens/GameScreen';
 
 // Components
 import { SettingsModal } from './components/SettingsModal';
 import { AgeVerificationModal } from './components/AgeVerificationModal';
+import { CustomChallengesModal } from './components/CustomChallengesModal';
 
 type Screen = 'splash' | 'setup' | 'pairings' | 'mode' | 'intensity' | 'game';
 
@@ -105,29 +106,52 @@ export default function App() {
   const [allowedPairings, setAllowedPairings] = useState<string[]>([]);
   const [currentChallenge, setCurrentChallenge] = useState<Challenge | null>(null);
   const [showPunishment, setShowPunishment] = useState(false);
-  const [loading, setLoading] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
+  const [showCustomChallenges, setShowCustomChallenges] = useState(false);
   const [showAdultModes, setShowAdultModes] = useState(false);
   const [ageVerified, setAgeVerified] = useState(false);
   const [showAgeVerification, setShowAgeVerification] = useState(false);
   const [pendingMode, setPendingMode] = useState<GameMode | null>(null);
+  const [recentPlayers, setRecentPlayers] = useState<Player[]>([]);
+
+  // Comodines de Emergencia (1 uso de cada comodín por jugador por partida)
+  const [playerJokers, setPlayerJokers] = useState<Record<string, PlayerJokerState>>({});
+  const [isDoubleOrNothing, setIsDoubleOrNothing] = useState<boolean>(false);
 
   // Timer
   const [timeLeft, setTimeLeft] = useState<number | null>(null);
   const [timerActive, setTimerActive] = useState(false);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  // ── Init ads once ──────────────────────────────────────────────────────────
+  // ── Init ads once and load recent players ───────────────────────────────────
   useEffect(() => {
     initAds();
+    try {
+      const saved = localStorage.getItem('vor_recent_players');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          setRecentPlayers(parsed);
+        }
+      }
+    } catch (_) {}
   }, []);
 
   // ── Splash timer ──────────────────────────────────────────────────────────
   useEffect(() => {
     if (screen !== 'splash') return;
-    const id = setTimeout(() => setScreen('setup'), 3000);
+    const id = setTimeout(() => setScreen('setup'), 2600);
     return () => clearTimeout(id);
   }, [screen]);
+
+  // ── Initialize jokers when entering game ───────────────────────────────────
+  const initPlayerJokers = (list: Player[]) => {
+    const initialMap: Record<string, PlayerJokerState> = {};
+    list.forEach(p => {
+      initialMap[p.id] = { pass: true, double: true, shield: true };
+    });
+    setPlayerJokers(initialMap);
+  };
 
   // ── Timer logic ───────────────────────────────────────────────────────────
   useEffect(() => {
@@ -137,7 +161,7 @@ export default function App() {
           if (prev === null || prev <= 1) {
             clearInterval(timerRef.current!);
             setTimerActive(false);
-            playBeep();
+            soundService.playTimerEndSound();
             return 0;
           }
           return prev - 1;
@@ -149,81 +173,77 @@ export default function App() {
     return () => {
       if (timerRef.current) clearInterval(timerRef.current);
     };
-  }, [timerActive]); // intentionally only re-run when timerActive changes
-
-  // ── Audio ─────────────────────────────────────────────────────────────────
-  const playBeep = () => {
-    hapticFeedback([30, 50, 30]);
-    try {
-      const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
-      const play = (freq: number, start: number, dur: number) => {
-        const osc = ctx.createOscillator();
-        const gain = ctx.createGain();
-        osc.connect(gain);
-        gain.connect(ctx.destination);
-        osc.type = 'sine';
-        osc.frequency.setValueAtTime(freq, ctx.currentTime + start);
-        gain.gain.setValueAtTime(0.1, ctx.currentTime + start);
-        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + start + dur);
-        osc.start(ctx.currentTime + start);
-        osc.stop(ctx.currentTime + start + dur + 0.01);
-      };
-      play(880, 0, 0.12);
-      play(880, 0.18, 0.35);
-    } catch (_) {}
-  };
+  }, [timerActive]);
 
   // ── Players ───────────────────────────────────────────────────────────────
   const addPlayer = (name: string, gender: 'male' | 'female') => {
     if (!name.trim()) return;
     hapticFeedback(15);
-    setPlayers((prev) => [
-      ...prev,
-      { id: Math.random().toString(36).slice(2, 11), name: name.trim(), gender },
-    ]);
+    soundService.playCardFlipSound();
+    const newP: Player = { id: Math.random().toString(36).slice(2, 11), name: name.trim(), gender };
+    setPlayers((prev) => {
+      const updated = [...prev, newP];
+      try {
+        localStorage.setItem('vor_recent_players', JSON.stringify(updated));
+        setRecentPlayers(updated);
+      } catch (_) {}
+      return updated;
+    });
   };
 
   const removePlayer = (id: string) => {
     hapticFeedback(10);
-    setPlayers((prev) => prev.filter((p) => p.id !== id));
+    soundService.playForfeitSound();
+    setPlayers((prev) => {
+      const updated = prev.filter((p) => p.id !== id);
+      try {
+        localStorage.setItem('vor_recent_players', JSON.stringify(updated));
+        setRecentPlayers(updated);
+      } catch (_) {}
+      return updated;
+    });
   };
 
-  // ── Mode toggle ───────────────────────────────────────────────────────────
-  const handleModeToggle = (m: GameMode) => {
-    hapticFeedback(15);
-    const isAdding = !selectedModes.find((sm) => sm.id === m.id);
-    if (isAdding && m.category === 'adult' && !ageVerified) {
-      setPendingMode(m);
-      setShowAgeVerification(true);
-      return;
+  const loadRecentPlayers = () => {
+    if (recentPlayers.length > 0) {
+      hapticFeedback(20);
+      soundService.playSuccessSound();
+      setPlayers(recentPlayers);
     }
-    setSelectedModes((prev) =>
-      isAdding ? [...prev, m] : prev.filter((sm) => sm.id !== m.id)
-    );
   };
 
-  // ── Navigation ────────────────────────────────────────────────────────────
-  /**
-   * When only 2 players we skip Pairings but still need to set allowedPairings
-   * based on their genders, so the challenge service can target correctly.
-   */
   const handleSetupNext = () => {
-    hapticFeedback(30);
+    hapticFeedback(20);
+    soundService.playCardFlipSound();
     if (players.length > 2) {
       setScreen('pairings');
     } else {
-      // Auto-derive pairing for 2 players
-      const g1 = players[0].gender;
-      const g2 = players[1].gender;
-      if (g1 === 'male' && g2 === 'male') setAllowedPairings(['MM']);
-      else if (g1 === 'female' && g2 === 'female') setAllowedPairings(['FF']);
-      else setAllowedPairings(['MF']);
       setScreen('mode');
     }
   };
 
+  // ── Modes ─────────────────────────────────────────────────────────────────
+  const handleModeToggle = (mode: GameMode) => {
+    hapticFeedback(15);
+    soundService.playCardFlipSound();
+    if (mode.category === 'adult' && !ageVerified) {
+      setPendingMode(mode);
+      setShowAgeVerification(true);
+      return;
+    }
+    setSelectedModes((prev) => {
+      const exists = prev.find((m) => m.id === mode.id);
+      if (exists) {
+        return prev.filter((m) => m.id !== mode.id);
+      } else {
+        return [...prev, mode];
+      }
+    });
+  };
+
   const goBack = () => {
     hapticFeedback(10);
+    soundService.playCardFlipSound();
     if (screen === 'pairings') setScreen('setup');
     else if (screen === 'mode') setScreen(players.length > 2 ? 'pairings' : 'setup');
     else if (screen === 'intensity') setScreen('mode');
@@ -233,37 +253,29 @@ export default function App() {
   // ── Challenge ─────────────────────────────────────────────────────────────
   const handleChallenge = async (type: 'truth' | 'dare') => {
     hapticFeedback(30);
-    setLoading(true);
     const player = players[turnIndex];
     const otherPlayers = players.filter((p) => p.id !== player.id);
-    const randomMode = selectedModes[Math.floor(Math.random() * selectedModes.length)];
+    const randomMode = selectedModes[Math.floor(Math.random() * selectedModes.length)] || selectedModes[0];
 
     try {
       const challenge = await fetchChallenge(
-        type, player, randomMode, intensity, history, 'es', otherPlayers
+        type, player, randomMode, intensity, history, 'es', otherPlayers, allowedPairings
       );
       setCurrentChallenge(challenge);
       setHistory((prev) => [...prev, challenge.id ?? challenge.text]);
-
-      // Confetti on dare
-      if (type === 'dare') {
-        confetti({ particleCount: 60, spread: 70, origin: { y: 0.6 }, colors: ['#ec4899', '#a855f7', '#ffffff'] });
-      }
     } catch (error) {
       console.error('Challenge Error:', error);
-      const category = randomMode.category === 'adult' ? 'adult' : 'family';
+      const category = randomMode?.category === 'adult' ? 'adult' : 'family';
       const list = OFFLINE_CHALLENGES[type][category];
       const text = list[Math.floor(Math.random() * list.length)];
       const fallback: Challenge = {
         type,
         text: `${player.name}, ${text}`,
         intensity,
-        punishment: 'Haz 10 flexiones.',
+        punishment: 'Toma un shot o haz 10 flexiones.',
         isFallback: true,
       };
       setCurrentChallenge(fallback);
-    } finally {
-      setLoading(false);
     }
   };
 
@@ -272,9 +284,46 @@ export default function App() {
     setTurnIndex((prev) => (prev + 1) % players.length);
     setCurrentChallenge(null);
     setShowPunishment(false);
+    setIsDoubleOrNothing(false);
     setTimeLeft(null);
     setTimerActive(false);
     if (timerRef.current) clearInterval(timerRef.current);
+  };
+
+  // ── Comodines de Emergencia Execution ─────────────────────────────────────
+  const handleUseJoker = (jokerType: 'pass' | 'double' | 'shield', targetPlayer?: Player) => {
+    const currentPlayer = players[turnIndex];
+    if (!currentPlayer) return;
+
+    // Marcar comodín como utilizado
+    setPlayerJokers(prev => ({
+      ...prev,
+      [currentPlayer.id]: {
+        ...(prev[currentPlayer.id] || { pass: true, double: true, shield: true }),
+        [jokerType]: false
+      }
+    }));
+
+    if (jokerType === 'shield') {
+      // Escudo: salva inmediatamente y salta al siguiente jugador
+      soundService.playSuccessSound();
+      nextTurn();
+    } else if (jokerType === 'double') {
+      // Doble o nada: activa el multiplicador
+      setIsDoubleOrNothing(true);
+    } else if (jokerType === 'pass' && targetPlayer && currentChallenge) {
+      // Pasar reto: transfiere el desafío al jugador elegido
+      const newTargetIndex = players.findIndex(p => p.id === targetPlayer.id);
+      if (newTargetIndex !== -1) {
+        setTurnIndex(newTargetIndex);
+        // Reemplazar nombre en texto si aplicaba
+        const updatedText = currentChallenge.text.replace(new RegExp(currentPlayer.name, 'g'), targetPlayer.name);
+        setCurrentChallenge({
+          ...currentChallenge,
+          text: updatedText.startsWith(targetPlayer.name) ? updatedText : `${targetPlayer.name}, ${updatedText}`
+        });
+      }
+    }
   };
 
   const startTimer = () => {
@@ -287,6 +336,7 @@ export default function App() {
 
   const shareChallenge = async () => {
     hapticFeedback(20);
+    soundService.playCardFlipSound();
     if (!currentChallenge) return;
     const text = `${t('turn_of')} ${players[turnIndex].name}\n\n${currentChallenge.type === 'truth' ? t('truth') : t('dare')}: ${currentChallenge.text}\n\n${t('punishment')} ${currentChallenge.punishment}\n\nJugando VOR - Batalla Group`;
     if (navigator.share) {
@@ -298,6 +348,7 @@ export default function App() {
 
   const resetGame = () => {
     hapticFeedback([50, 100, 50]);
+    soundService.playForfeitSound();
     setPlayers([]);
     setSelectedModes([]);
     setAllowedPairings([]);
@@ -305,6 +356,7 @@ export default function App() {
     setHistory([]);
     setCurrentChallenge(null);
     setShowPunishment(false);
+    setIsDoubleOrNothing(false);
     setTimeLeft(null);
     setTimerActive(false);
     setShowSettings(false);
@@ -313,20 +365,16 @@ export default function App() {
   };
 
   // ── Render ────────────────────────────────────────────────────────────────
+  const currentPlayer = players[turnIndex];
+  const currentJokers = currentPlayer ? (playerJokers[currentPlayer.id] || { pass: true, double: true, shield: true }) : { pass: true, double: true, shield: true };
+
   return (
     <div className="min-h-screen bg-black text-white font-sans selection:bg-pink-500/30 overflow-x-hidden">
-      {/* Ambient dots */}
-      <div className="fixed inset-0 overflow-hidden pointer-events-none opacity-40">
-        <div className="absolute top-1/4 left-1/4 w-1 h-1 bg-pink-500 rounded-full animate-ping" />
-        <div className="absolute top-3/4 right-1/4 w-1 h-1 bg-blue-500 rounded-full animate-ping" style={{ animationDelay: '1.5s' }} />
-        <div className="absolute top-1/2 right-1/2 w-1 h-1 bg-purple-500 rounded-full animate-ping" style={{ animationDelay: '3s' }} />
-      </div>
-
-      <main className="relative z-10 max-w-md mx-auto px-6 py-8 min-h-screen flex flex-col">
+      <main className="relative z-10 max-w-md mx-auto px-6 pt-12 pb-28 min-h-screen flex flex-col">
 
         {/* Header */}
         {screen !== 'splash' && (
-          <header className="flex justify-between items-center mb-10">
+          <header className="flex justify-between items-center mt-2 mb-8">
             <div className="flex flex-col">
               <span className="text-[10px] font-black text-pink-500 uppercase tracking-[0.3em] mb-1">
                 {screen.toUpperCase()}
@@ -337,7 +385,7 @@ export default function App() {
             </div>
             <div className="flex gap-2">
               <button
-                onClick={() => { hapticFeedback(20); setShowSettings(true); }}
+                onClick={() => { hapticFeedback(20); soundService.playCardFlipSound(); setShowSettings(true); }}
                 className="p-3 rounded-full bg-white/5 hover:bg-white/10 transition-all border border-white/10"
               >
                 <Settings className="w-5 h-5 text-slate-400" />
@@ -354,8 +402,10 @@ export default function App() {
             <SetupScreen
               key="setup"
               players={players}
+              recentPlayers={recentPlayers}
               addPlayer={addPlayer}
               removePlayer={removePlayer}
+              loadRecentPlayers={loadRecentPlayers}
               onNext={handleSetupNext}
               t={t}
             />
@@ -391,7 +441,10 @@ export default function App() {
               intensity={intensity}
               setIntensity={setIntensity}
               onBack={goBack}
-              onPlay={() => setScreen('game')}
+              onPlay={() => {
+                initPlayerJokers(players);
+                setScreen('game');
+              }}
               t={t}
             />
           )}
@@ -404,17 +457,18 @@ export default function App() {
               selectedModes={selectedModes}
               intensity={intensity}
               currentChallenge={currentChallenge}
-              loading={loading}
               timeLeft={timeLeft}
               showPunishment={showPunishment}
               historyLength={history.length}
+              playerJokers={currentJokers}
+              isDoubleOrNothing={isDoubleOrNothing}
               handleChallenge={handleChallenge}
               nextTurn={nextTurn}
               onBack={goBack}
               shareChallenge={shareChallenge}
               startTimer={startTimer}
               setShowPunishment={setShowPunishment}
-
+              onUseJoker={handleUseJoker}
               t={t}
             />
           )}
@@ -447,38 +501,22 @@ export default function App() {
                 setScreen('setup');
                 setShowSettings(false);
               }}
+              onOpenCustomChallenges={() => {
+                setShowSettings(false);
+                setShowCustomChallenges(true);
+              }}
+              t={t}
+            />
+          )}
+          {showCustomChallenges && (
+            <CustomChallengesModal
+              onClose={() => setShowCustomChallenges(false)}
               t={t}
             />
           )}
         </AnimatePresence>
 
-        {/* Global loading overlay */}
-        <AnimatePresence>
-          {loading && (
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              className="fixed inset-0 z-[200] bg-black/80 backdrop-blur-sm flex items-center justify-center"
-            >
-              <div className="flex flex-col items-center gap-4">
-                <motion.div
-                  animate={{ rotate: 360 }}
-                  transition={{ duration: 0.8, repeat: Infinity, ease: 'linear' }}
-                  className="w-8 h-8 border-4 border-pink-500 border-t-transparent rounded-full"
-                />
-                <p className="font-black text-[10px] tracking-widest text-pink-500">
-                  {t('generating')}
-                </p>
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
       </main>
     </div>
   );
 }
-
-
-
-

@@ -74,21 +74,21 @@ export function PairingsScreen({ allowedPairings, setAllowedPairings, onBack, on
         ))}
       </div>
 
-      <div className="mt-auto pt-8">
+      <div className="mt-auto pt-6 pb-6">
         <button 
           disabled={allowedPairings.length === 0}
           onClick={() => {
             hapticFeedback(30);
             onNext();
           }}
-          className="w-full py-4 bg-white text-black rounded-full font-black text-lg shadow-2xl shadow-white/10 disabled:opacity-30 flex items-center justify-center gap-2 group text-center"
+          className="w-full py-4 bg-white text-black rounded-full font-black text-lg shadow-2xl shadow-white/10 disabled:opacity-30 flex items-center justify-center gap-2 group text-center mb-6"
         >
           {t('next')} <ChevronRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
         </button>
-        <div className="h-4" />
         <AdMobBanner />
       </div>
     </motion.div>
   );
 }
+
 

@@ -1,4 +1,4 @@
-﻿import { AdMob, BannerAdSize, BannerAdPosition } from '@capacitor-community/admob';
+import { AdMob, BannerAdSize, BannerAdPosition } from '@capacitor-community/admob';
 
 export const ADMOB_CONFIG = {
   appId: 'ca-app-pub-3849768825456219~7335875202',
@@ -6,6 +6,7 @@ export const ADMOB_CONFIG = {
 };
 
 let _initialized = false;
+let _bannerShown = false;
 
 export async function initAds() {
   if (_initialized) return;
@@ -17,11 +18,14 @@ export async function initAds() {
   }
 }
 
-export function isAdsReady() { return _initialized; }
+export function isAdsReady() {
+  return _initialized;
+}
 
 export async function showBannerAd() {
-  if (!_initialized) return;
+  if (!_initialized || _bannerShown) return;
   try {
+    _bannerShown = true;
     await AdMob.showBanner({
       adId: ADMOB_CONFIG.banner,
       adSize: BannerAdSize.BANNER,
@@ -30,12 +34,16 @@ export async function showBannerAd() {
       isTesting: false,
     });
   } catch (e) {
+    _bannerShown = false;
     console.warn('Banner error:', e);
   }
 }
 
 export async function hideBannerAd() {
-  try { await AdMob.hideBanner(); } catch (_) {}
+  try {
+    await AdMob.hideBanner();
+    _bannerShown = false;
+  } catch (_) {}
 }
 
 export function showInterstitial() {}

@@ -13,14 +13,24 @@ const hapticFeedback = (pattern: number | number[] = 10) => {
 
 interface SetupScreenProps {
   players: Player[];
+  recentPlayers: Player[];
   addPlayer: (name: string, gender: 'male' | 'female') => void;
   removePlayer: (id: string) => void;
+  loadRecentPlayers: () => void;
   onNext: () => void;
   t: (key: string) => string;
   key?: string;
 }
 
-export function SetupScreen({ players, addPlayer, removePlayer, onNext, t }: SetupScreenProps) {
+export function SetupScreen({
+  players,
+  recentPlayers,
+  addPlayer,
+  removePlayer,
+  loadRecentPlayers,
+  onNext,
+  t
+}: SetupScreenProps) {
   return (
     <motion.div 
       initial={{ opacity: 0, y: 20 }}
@@ -32,9 +42,32 @@ export function SetupScreen({ players, addPlayer, removePlayer, onNext, t }: Set
         <h2 className="text-2xl font-black mb-1">{t('setup')}</h2>
         <div className="flex justify-between items-center">
           <p className="text-slate-500 text-xs font-medium">{t('setup_desc')}</p>
-          <span className="text-[8px] font-bold text-slate-700 uppercase tracking-widest">v1.4.0</span>
+          <span className="text-[8px] font-bold text-slate-700 uppercase tracking-widest">v1.6.4</span>
         </div>
       </div>
+
+      {/* Quick restore previous session */}
+      {players.length === 0 && recentPlayers.length >= 2 && (
+        <motion.div
+          initial={{ opacity: 0, y: -10 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="mb-4 p-3 rounded-2xl bg-pink-500/10 border border-pink-500/20 flex items-center justify-between"
+        >
+          <div className="flex flex-col">
+            <span className="text-xs font-bold text-white">¿Mismos jugadores?</span>
+            <span className="text-[10px] text-slate-400">{recentPlayers.map(p => p.name).join(', ')}</span>
+          </div>
+          <button
+            onClick={() => {
+              hapticFeedback(20);
+              loadRecentPlayers();
+            }}
+            className="px-3 py-1.5 bg-pink-500 text-white rounded-full font-black text-xs shadow-lg shadow-pink-500/30 shrink-0"
+          >
+            Cargar
+          </button>
+        </motion.div>
+      )}
 
       <div className="space-y-2 mb-4 max-h-[30vh] overflow-y-auto pr-2 custom-scrollbar">
         {players.map(p => (
@@ -59,21 +92,22 @@ export function SetupScreen({ players, addPlayer, removePlayer, onNext, t }: Set
 
       <PlayerInput onAdd={addPlayer} t={t} />
 
-      <div className="mt-auto pt-8">
+      <div className="mt-auto pt-6 pb-6">
         <button 
           disabled={players.length < 2}
           onClick={() => {
             hapticFeedback(30);
             onNext();
           }}
-          className="w-full py-4 bg-white text-black rounded-full font-black text-lg shadow-2xl shadow-white/10 disabled:opacity-30 flex items-center justify-center gap-2 group transition-all text-center"
+          className="w-full py-4 bg-white text-black rounded-full font-black text-lg shadow-2xl shadow-white/10 disabled:opacity-30 flex items-center justify-center gap-2 group transition-all text-center mb-6"
         >
           {t('next')} <ChevronRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
         </button>
-        <div className="h-4" />
         <AdMobBanner />
       </div>
     </motion.div>
   );
 }
+
+
 
