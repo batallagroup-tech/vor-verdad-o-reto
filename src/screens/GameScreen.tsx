@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { ArrowLeft, Share2, RotateCcw, Volume2, VolumeX, Sparkles, Shield, RefreshCw, Zap, X } from 'lucide-react';
+import { ArrowLeft, RotateCcw, Volume2, VolumeX, Sparkles, Shield, RefreshCw, Zap, X } from 'lucide-react';
 import { Player, GameMode, Intensity, Challenge } from '../types';
 import AdMobBanner from '../components/AdMobBanner';
 import { soundService } from '../services/soundService';
@@ -29,7 +29,7 @@ interface GameScreenProps {
   handleChallenge: (type: 'truth' | 'dare') => void;
   nextTurn: () => void;
   onBack: () => void;
-  shareChallenge: () => void;
+  shareChallenge?: () => void;
   startTimer: () => void;
   setShowPunishment: (show: boolean) => void;
   onUseJoker?: (jokerType: 'pass' | 'double' | 'shield', targetPlayer?: Player) => void;
@@ -50,7 +50,6 @@ export function GameScreen({
   handleChallenge,
   nextTurn,
   onBack,
-  shareChallenge,
   startTimer,
   setShowPunishment,
   onUseJoker,
@@ -61,6 +60,20 @@ export function GameScreen({
   const [selectingTargetForPass, setSelectingTargetForPass] = useState(false);
   const [soundActive, setSoundActive] = useState(() => soundService.isEnabled());
 
+  // Activar alarma continua cuando el tiempo llegue a 0
+  useEffect(() => {
+    if (timeLeft === 0) {
+      soundService.startAlarmLoop();
+    }
+  }, [timeLeft]);
+
+  // Limpiar alarma al desmontar
+  useEffect(() => {
+    return () => {
+      soundService.stopAlarmLoop();
+    };
+  }, []);
+
   const otherPlayers = players.filter((_, idx) => idx !== turnIndex);
   const availableJokersCount = (playerJokers.pass ? 1 : 0) + (playerJokers.double ? 1 : 0) + (playerJokers.shield ? 1 : 0);
 
@@ -68,6 +81,19 @@ export function GameScreen({
     hapticFeedback(10);
     const enabled = soundService.toggleSound();
     setSoundActive(enabled);
+  };
+
+  const handleFinishTurn = () => {
+    soundService.stopAlarmLoop();
+    soundService.playSuccessSound();
+    nextTurn();
+  };
+
+  const handleRefuseChallenge = () => {
+    soundService.stopAlarmLoop();
+    hapticFeedback([60, 40, 60]);
+    soundService.playForfeitSound();
+    setShowPunishment(true);
   };
 
   return (
@@ -183,7 +209,7 @@ export function GameScreen({
                 : 'border-pink-500/50 bg-gradient-to-b from-pink-950/20 to-black/60'
             }`}
           >
-            {/* Top controls: Sound and Share */}
+            {/* Top controls: Sound */}
             <div className="absolute top-4 left-4">
               <button
                 onClick={toggleSound}
@@ -192,13 +218,6 @@ export function GameScreen({
                 {soundActive ? <Volume2 className="w-3.5 h-3.5 text-pink-400" /> : <VolumeX className="w-3.5 h-3.5 text-slate-500" />}
               </button>
             </div>
-
-            <button
-              onClick={shareChallenge}
-              className="absolute top-4 right-4 p-2 rounded-full bg-white/5 hover:bg-white/10 transition-all border border-white/10"
-            >
-              <Share2 className="w-3.5 h-3.5 text-slate-400" />
-            </button>
 
             {/* Type badge */}
             <div className="mb-3 flex justify-center items-center gap-4 pt-1">
@@ -318,10 +337,7 @@ export function GameScreen({
             <motion.button
               whileHover={{ scale: 1.02, y: -2 }}
               whileTap={{ scale: 0.98 }}
-              onClick={() => {
-                soundService.playSuccessSound();
-                nextTurn();
-              }}
+              onClick={handleFinishTurn}
               className="w-full py-4 bg-white text-black rounded-full font-black text-base transition-colors text-center shadow-lg"
             >
               {t('done')}
@@ -331,11 +347,7 @@ export function GameScreen({
               <motion.button
                 whileHover={{ scale: 1.02, y: -2 }}
                 whileTap={{ scale: 0.98 }}
-                onClick={() => {
-                  hapticFeedback([60, 40, 60]);
-                  soundService.playForfeitSound();
-                  setShowPunishment(true);
-                }}
+                onClick={handleRefuseChallenge}
                 className="w-full py-3.5 bg-red-500/10 text-red-500 border border-red-500/20 rounded-full font-black text-base text-center"
               >
                 {t('refuse')}
@@ -344,10 +356,7 @@ export function GameScreen({
               <motion.button
                 whileHover={{ scale: 1.02, y: -2 }}
                 whileTap={{ scale: 0.98 }}
-                onClick={() => {
-                  soundService.playSuccessSound();
-                  nextTurn();
-                }}
+                onClick={handleFinishTurn}
                 className="w-full py-4 bg-red-500 text-white rounded-full font-black text-base text-center shadow-lg shadow-red-500/30"
               >
                 {t('next')}

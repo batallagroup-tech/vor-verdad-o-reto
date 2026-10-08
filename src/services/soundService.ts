@@ -205,6 +205,8 @@ class SoundService {
     } catch (_) {}
   }
 
+  private alarmInterval: ReturnType<typeof setInterval> | null = null;
+
   // 8. Tiempo Agotado (Alarm Beep)
   public playTimerEndSound() {
     if (!this.enabled) return;
@@ -212,19 +214,46 @@ class SoundService {
     if (!ctx) return;
     try {
       const now = ctx.currentTime;
-      [800, 800, 800].forEach((freq, idx) => {
+      [880, 880, 1100].forEach((freq, idx) => {
         const osc = ctx.createOscillator();
         const gain = ctx.createGain();
         osc.type = 'square';
-        osc.frequency.setValueAtTime(freq, now + idx * 0.12);
-        gain.gain.setValueAtTime(0.12, now + idx * 0.12);
-        gain.gain.exponentialRampToValueAtTime(0.001, now + idx * 0.12 + 0.08);
+        osc.frequency.setValueAtTime(freq, now + idx * 0.1);
+        gain.gain.setValueAtTime(0.15, now + idx * 0.1);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + idx * 0.1 + 0.08);
         osc.connect(gain);
         gain.connect(ctx.destination);
-        osc.start(now + idx * 0.12);
-        osc.stop(now + idx * 0.12 + 0.09);
+        osc.start(now + idx * 0.1);
+        osc.stop(now + idx * 0.1 + 0.09);
       });
     } catch (_) {}
+  }
+
+  // 9. Alarma insistente y continua hasta presionar "Hecho"
+  public startAlarmLoop() {
+    this.stopAlarmLoop();
+    this.playTimerEndSound();
+    if (typeof navigator !== 'undefined' && navigator.vibrate) {
+      navigator.vibrate([100, 50, 100]);
+    }
+
+    this.alarmInterval = setInterval(() => {
+      if (!this.enabled) {
+        this.stopAlarmLoop();
+        return;
+      }
+      this.playTimerEndSound();
+      if (typeof navigator !== 'undefined' && navigator.vibrate) {
+        navigator.vibrate([80, 40, 80]);
+      }
+    }, 900);
+  }
+
+  public stopAlarmLoop() {
+    if (this.alarmInterval) {
+      clearInterval(this.alarmInterval);
+      this.alarmInterval = null;
+    }
   }
 }
 

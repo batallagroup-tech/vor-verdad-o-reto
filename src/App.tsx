@@ -3,7 +3,7 @@ import { AnimatePresence, motion } from 'motion/react';
 import { Settings } from 'lucide-react';
 import { Player, GameMode, Intensity, Challenge } from './types';
 import { OFFLINE_CHALLENGES } from './constants';
-import { fetchChallenge } from './services/challengeService';
+import { fetchChallenge, resetSessionHistory, clearCache } from './services/challengeService';
 import { initAds } from './services/ads';
 import { soundService } from './services/soundService';
 
@@ -242,6 +242,7 @@ export default function App() {
   };
 
   const goBack = () => {
+    soundService.stopAlarmLoop();
     hapticFeedback(10);
     soundService.playCardFlipSound();
     if (screen === 'pairings') setScreen('setup');
@@ -252,6 +253,7 @@ export default function App() {
 
   // ── Challenge ─────────────────────────────────────────────────────────────
   const handleChallenge = async (type: 'truth' | 'dare') => {
+    soundService.stopAlarmLoop();
     hapticFeedback(30);
     const player = players[turnIndex];
     const otherPlayers = players.filter((p) => p.id !== player.id);
@@ -270,7 +272,7 @@ export default function App() {
       const text = list[Math.floor(Math.random() * list.length)];
       const fallback: Challenge = {
         type,
-        text: `${player.name}, ${text}`,
+        text: `${player.name}: ${text}`,
         intensity,
         punishment: 'Toma un shot o haz 10 flexiones.',
         isFallback: true,
@@ -280,6 +282,7 @@ export default function App() {
   };
 
   const nextTurn = () => {
+    soundService.stopAlarmLoop();
     hapticFeedback(15);
     setTurnIndex((prev) => (prev + 1) % players.length);
     setCurrentChallenge(null);
@@ -347,6 +350,9 @@ export default function App() {
   };
 
   const resetGame = () => {
+    soundService.stopAlarmLoop();
+    resetSessionHistory();
+    clearCache();
     hapticFeedback([50, 100, 50]);
     soundService.playForfeitSound();
     setPlayers([]);
@@ -443,6 +449,8 @@ export default function App() {
               onBack={goBack}
               onPlay={() => {
                 initPlayerJokers(players);
+                resetSessionHistory();
+                clearCache();
                 setScreen('game');
               }}
               t={t}

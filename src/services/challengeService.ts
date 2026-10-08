@@ -24,6 +24,79 @@ const intensityMap: Record<string, number> = {
   extreme: 5,
 };
 
+// Global session registry of used challenge texts/IDs across ALL players
+const sessionUsedChallenges: Set<string> = new Set<string>();
+
+export function resetSessionHistory() {
+  sessionUsedChallenges.clear();
+}
+
+function normalizeKey(text: string): string {
+  return text
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]/g, "")
+    .trim();
+}
+
+// ── 1. Extractor inteligente y dinámico de temporizador desde el texto ────────
+export function extractDynamicTimer(text: string, defaultTimer: number = 0): number {
+  if (!text) return defaultTimer || 0;
+
+  // 1. "X segundos" o "X seg" o "X s" (ej. "por 10 segundos", "durante 15 seg", "en 20s", "10s")
+  const secondsMatch = text.match(/\b(\d{1,3})\s*(?:segundos|segundo|segs|seg|s)\b/i);
+  if (secondsMatch && secondsMatch[1]) {
+    const val = parseInt(secondsMatch[1], 10);
+    if (val >= 5 && val <= 300) return val;
+  }
+
+  // 2. "medio minuto"
+  if (/\bmedio\s*minuto\b/i.test(text)) {
+    return 30;
+  }
+
+  // 3. "X minutos" (ej. "por 1 minuto", "durante 2 minutos")
+  const minutesMatch = text.match(/\b(\d{1,2})\s*(?:minutos|minuto|mins|min)\b/i);
+  if (minutesMatch && minutesMatch[1]) {
+    const mins = parseInt(minutesMatch[1], 10);
+    if (mins >= 1 && mins <= 5) return mins * 60;
+  }
+
+  // 4. "cuenta hasta X" (ej. "mientras cuentan hasta 10 / 15 / 20 / 30")
+  const countMatch = text.match(/\bcuenta[n]?\s*hasta\s*(\d{1,3})\b/i);
+  if (countMatch && countMatch[1]) {
+    const countVal = parseInt(countMatch[1], 10);
+    if (countVal >= 5 && countVal <= 120) return countVal;
+  }
+
+  // Si no se especifica tiempo en el texto pero tiene timer por defecto
+  return defaultTimer || 0;
+}
+
+// ── 2. Validación estricta de género ──────────────────────────────────────────
+const FEMALE_EXPLICIT_WORDS = /\b(sostén|brasier|tanga|falda|vestido|maquillaje|labial|embarazada|reina|chica|chicas|mujer|mujeres|amiga|amigas|novia|esposa)\b/i;
+const MALE_EXPLICIT_WORDS = /\b(barba|bigote|boxer|calzoncillo|chico|chicos|hombre|hombres|amigo|amigos|novio|esposo|rey)\b/i;
+
+function isValidForGender(c: StoredChallenge, playerGender: 'male' | 'female'): boolean {
+  if (c.playerGender && c.playerGender !== 'any') {
+    if (c.playerGender !== playerGender) return false;
+  }
+
+  // Verificación adicional de vocabulario excluyente para evitar fallos de etiquetado
+  if (playerGender === 'male') {
+    if (/\b(tu sostén|tu brasier|tu falda|tu labial|quítate el sostén|quítate el brasier)\b/i.test(c.text)) {
+      return false;
+    }
+  } else if (playerGender === 'female') {
+    if (/\b(tu barba|aféitate la barba|tu boxer de hombre)\b/i.test(c.text)) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
 function shuffle<T>(array: T[]): T[] {
   const arr = [...array];
   for (let i = arr.length - 1; i > 0; i--) {
@@ -43,7 +116,7 @@ function getPunishment(mode: GameMode, intensity: Intensity, targetName?: string
   );
   if (exact.length > 0) {
     let pText = exact[Math.floor(Math.random() * exact.length)].texto;
-    if (targetName) pText = pText.replace(/el grupo/gi, targetName);
+    if (targetName) pText = pText.replace(/el grupo|tu compañero\/a/gi, targetName);
     return pText;
   }
 
@@ -51,14 +124,12 @@ function getPunishment(mode: GameMode, intensity: Intensity, targetName?: string
   const byIntensity = PUNISHMENTS.filter((p) => p.intensidad === intNum);
   if (byIntensity.length > 0) {
     let pText = byIntensity[Math.floor(Math.random() * byIntensity.length)].texto;
-    if (targetName) pText = pText.replace(/el grupo/gi, targetName);
+    if (targetName) pText = pText.replace(/el grupo|tu compañero\/a/gi, targetName);
     return pText;
   }
 
   return targetName ? `${targetName} decide tu castigo.` : 'El grupo decide tu castigo.';
 }
-
-const stackMap: Record<string, StoredChallenge[]> = {};
 
 function getCustomChallenges(): StoredChallenge[] {
   if (typeof window === 'undefined') return [];
@@ -70,84 +141,14 @@ function getCustomChallenges(): StoredChallenge[] {
   }
 }
 
-function getFilteredChallenges(
-  type: 'truth' | 'dare',
-  mode: GameMode,
-  intensity: Intensity,
-  playerCount: number,
-  playerGender: 'male' | 'female',
-  historyCount: number = 0
-): StoredChallenge[] {
-  let intNum = intensityMap[intensity] ?? 3;
-  if (intensity === 'progressive') {
-    if (historyCount < 4) intNum = 1;
-    else if (historyCount < 8) intNum = 2;
-    else if (historyCount < 13) intNum = 3;
-    else if (historyCount < 18) intNum = 4;
-    else intNum = 5;
-  }
-
-  const targetMode = mode.id;
-  const customList = getCustomChallenges();
-  
-  // Procesar retos personalizados con su prioridad y modo asignado
-  const expandedCustom: StoredChallenge[] = [];
-  customList.forEach((c) => {
-    // Si el reto personalizado aplica a este modo o a todos
-    const matchesMode = !c.modeId || c.modeId === 'all' || c.modeId === 'custom' || c.modeId === targetMode;
-    if (!matchesMode) return;
-
-    if (c.priority === 'high') {
-      // Prioridad alta: se inyecta 4 veces para mayor frecuencia
-      expandedCustom.push(c, c, c, c);
-    } else if (c.priority === 'climax') {
-      // Para el final / Clímax: aparece en rondas avanzadas o intensidad alta
-      if (historyCount >= 3 || intNum >= 3) {
-        expandedCustom.push(c, c, c);
-      }
-    } else {
-      // Normal: se inyecta 2 veces para balance perfecto
-      expandedCustom.push(c, c);
-    }
-  });
-
-  // Filtrar retos personalizados válidos para este tipo y género
-  const customMatches = expandedCustom.filter(
-    (c) => c.type === type && (!c.playerGender || c.playerGender === 'any' || c.playerGender === playerGender)
-  );
-
-  // Filtrar retos predeterminados por tipo, modo, género y audiencia
-  let builtInMatches = ALL_CHALLENGES.filter(
-    (c) => c.type === type && (c.modeId === targetMode || c.modeId === 'custom' || c.modeId === 'all' || !c.modeId)
-  );
-
-  builtInMatches = builtInMatches.filter(
-    (c) => !c.playerGender || c.playerGender === 'any' || c.playerGender === playerGender
-  );
-
-  // Adaptación de audiencia según número de jugadores
-  if (playerCount <= 2) {
-    builtInMatches = builtInMatches.filter((c) => c.audience !== 'group');
-    const strictlyGroup = /todos los jugadores|en círculo|por turnos|cada jugador vota|el grupo decide/i;
-    builtInMatches = builtInMatches.filter((c) => !strictlyGroup.test(c.text));
-  } else {
-    builtInMatches = builtInMatches.filter((c) => c.audience !== 'couple');
-  }
-
-  // Filtrar retos predeterminados por intensidad
-  const exactMatches = builtInMatches.filter((c) => c.intensity === intNum);
-  if (exactMatches.length >= 5) {
-    builtInMatches = exactMatches;
-  } else {
-    // Permitir intensidades adyacentes (±1)
-    const adjacentMatches = builtInMatches.filter((c) => Math.abs(c.intensity - intNum) <= 1);
-    if (adjacentMatches.length > 0) {
-      builtInMatches = adjacentMatches;
-    }
-  }
-
-  // Combinar retos base con los personalizados (los personalizados siempre disponibles)
-  return [...builtInMatches, ...customMatches];
+function adaptTextForTwoPlayers(text: string, targetName: string): string {
+  let adapted = text;
+  adapted = adapted.replace(/\b(la persona a tu derecha|la persona de tu derecha|a tu derecha)\b/gi, targetName);
+  adapted = adapted.replace(/\b(la persona a tu izquierda|la persona de tu izquierda|a tu izquierda)\b/gi, targetName);
+  adapted = adapted.replace(/\b(la persona que elijas|la persona que tú elijas|a quien elijas|alguien que elijas)\b/gi, targetName);
+  adapted = adapted.replace(/\b(alguien en esta habitación|alguien de la sala|alguien del grupo|alguien de aquí)\b/gi, targetName);
+  adapted = adapted.replace(/\b(tu pareja o compañero|tu compañero o compañera|tu compañero\/a)\b/gi, targetName);
+  return adapted;
 }
 
 function chooseTarget(player: Player, otherPlayers: Player[], allowedPairings?: string[]): Player {
@@ -183,16 +184,7 @@ function chooseTarget(player: Player, otherPlayers: Player[], allowedPairings?: 
   return otherPlayers[Math.floor(Math.random() * otherPlayers.length)];
 }
 
-function adaptTextForTwoPlayers(text: string, targetName: string): string {
-  let adapted = text;
-  adapted = adapted.replace(/\b(la persona a tu derecha|la persona de tu derecha|a tu derecha)\b/gi, targetName);
-  adapted = adapted.replace(/\b(la persona a tu izquierda|la persona de tu izquierda|a tu izquierda)\b/gi, targetName);
-  adapted = adapted.replace(/\b(la persona que elijas|la persona que tú elijas|a quien elijas|alguien que elijas)\b/gi, targetName);
-  adapted = adapted.replace(/\b(alguien en esta habitación|alguien de la sala|alguien del grupo|alguien de aquí)\b/gi, targetName);
-  adapted = adapted.replace(/\b(tu pareja o compañero|tu compañero o compañera|tu compañero\/a)\b/gi, targetName);
-  return adapted;
-}
-
+// ── 3. Fetch Challenge con Anti-Repetición Global y Prioridad de Personalizados ─
 export async function fetchChallenge(
   type: 'truth' | 'dare',
   player: Player,
@@ -204,32 +196,145 @@ export async function fetchChallenge(
   allowedPairings?: string[]
 ): Promise<Challenge> {
   const isTwoPlayers = otherPlayers.length === 1;
-  const stackKey = `${type}_${mode.id}_${intensity}_${isTwoPlayers ? 'two' : 'group'}_${player.gender}`;
+  const playerCount = otherPlayers.length + 1;
+  const targetMode = mode.id;
+  const historyCount = sessionUsedChallenges.size;
 
-  if (!stackMap[stackKey] || stackMap[stackKey].length === 0) {
-    const fresh = getFilteredChallenges(type, mode, intensity, otherPlayers.length + 1, player.gender, _history.length);
-    stackMap[stackKey] = shuffle(fresh);
+  let intNum = intensityMap[intensity] ?? 3;
+  if (intensity === 'progressive') {
+    if (historyCount < 4) intNum = 1;
+    else if (historyCount < 8) intNum = 2;
+    else if (historyCount < 13) intNum = 3;
+    else if (historyCount < 18) intNum = 4;
+    else intNum = 5;
   }
 
-  const target = chooseTarget(player, otherPlayers, allowedPairings);
+  // ── PASO 1: Procesar Retos Personalizados Creados por el Usuario ──────────
+  const customList = getCustomChallenges();
+  const validCustom = customList.filter((c) => {
+    if (c.type !== type) return false;
+    const matchesMode = !c.modeId || c.modeId === 'all' || c.modeId === 'custom' || c.modeId === targetMode;
+    if (!matchesMode) return false;
+    if (!isValidForGender(c, player.gender)) return false;
+    return true;
+  });
 
-  if (stackMap[stackKey].length === 0) {
+  // Retos personalizados que aún NO han sido usados en esta partida
+  const unplayedCustom = validCustom.filter((c) => !sessionUsedChallenges.has(normalizeKey(c.text)));
+
+  // Si hay retos personalizados pendientes, inyectarlos con alta probabilidad según su prioridad
+  if (unplayedCustom.length > 0) {
+    const highPriority = unplayedCustom.filter((c) => c.priority === 'high');
+    const normalPriority = unplayedCustom.filter((c) => !c.priority || c.priority === 'normal');
+    const climaxPriority = unplayedCustom.filter((c) => c.priority === 'climax');
+
+    let shouldPickCustom = false;
+    let poolToPickFrom: StoredChallenge[] = [];
+
+    // Frecuente (High): 65% de probabilidad de salir de inmediato en los primeros turnos
+    if (highPriority.length > 0 && (Math.random() < 0.65 || historyCount % 2 === 0)) {
+      shouldPickCustom = true;
+      poolToPickFrom = highPriority;
+    } else if (normalPriority.length > 0 && Math.random() < 0.40) {
+      // Normal: 40% de probabilidad
+      shouldPickCustom = true;
+      poolToPickFrom = normalPriority;
+    } else if (climaxPriority.length > 0 && (historyCount >= 4 || intNum >= 3) && Math.random() < 0.50) {
+      // Clímax: sale en rondas avanzadas
+      shouldPickCustom = true;
+      poolToPickFrom = climaxPriority;
+    } else if (unplayedCustom.length > 0 && historyCount % 3 === 0) {
+      // Garantizar que cualquier personalizado salga cada 3 turnos
+      shouldPickCustom = true;
+      poolToPickFrom = unplayedCustom;
+    }
+
+    if (shouldPickCustom && poolToPickFrom.length > 0) {
+      const selected = poolToPickFrom[Math.floor(Math.random() * poolToPickFrom.length)];
+      sessionUsedChallenges.add(normalizeKey(selected.text));
+
+      const target = chooseTarget(player, otherPlayers, allowedPairings);
+      let finalText = selected.text;
+      if (otherPlayers.length > 0) {
+        if (isTwoPlayers) finalText = adaptTextForTwoPlayers(finalText, target.name);
+        finalText = finalText.replace(/\{target\}/g, target.name);
+      }
+      finalText = finalText.replace(/\{player\}/g, player.name);
+
+      if (finalText.length > 0 && !finalText.toLowerCase().includes(player.name.toLowerCase())) {
+        finalText = `${player.name}: ${finalText}`;
+      }
+
+      const parsedTimer = extractDynamicTimer(finalText, selected.timer || 0);
+
+      return {
+        id: 'custom_' + Math.random().toString(36).substring(2, 9),
+        type,
+        text: finalText,
+        intensity,
+        punishment: getPunishment(mode, intensity, isTwoPlayers ? target.name : undefined),
+        timer: parsedTimer,
+      };
+    }
+  }
+
+  // ── PASO 2: Filtrar Retos Predeterminados ─────────────────────────────────
+  let candidates = ALL_CHALLENGES.filter((c) => {
+    if (c.type !== type) return false;
+    const matchesMode = c.modeId === targetMode || c.modeId === 'custom' || c.modeId === 'all' || !c.modeId;
+    if (!matchesMode) return false;
+    if (!isValidForGender(c, player.gender)) return false;
+
+    // Audiencia para 2 jugadores vs grupos
+    if (playerCount <= 2) {
+      if (c.audience === 'group') return false;
+      if (/todos los jugadores|en círculo|por turnos|cada jugador vota|el grupo decide/i.test(c.text)) return false;
+    } else {
+      if (c.audience === 'couple') return false;
+    }
+
+    return true;
+  });
+
+  // Filtrar retos por intensidad
+  const exactInt = candidates.filter((c) => c.intensity === intNum);
+  if (exactInt.length >= 8) {
+    candidates = exactInt;
+  } else {
+    const adjInt = candidates.filter((c) => Math.abs(c.intensity - intNum) <= 1);
+    if (adjInt.length > 0) candidates = adjInt;
+  }
+
+  // ── PASO 3: Anti-Repetición Global Estricta ──────────────────────────────
+  let unplayedCandidates = candidates.filter((c) => !sessionUsedChallenges.has(normalizeKey(c.text)));
+
+  // Si la partida es larguísima y se agotó el banco de este modo, reiniciar pool
+  if (unplayedCandidates.length === 0) {
+    candidates.forEach((c) => sessionUsedChallenges.delete(normalizeKey(c.text)));
+    unplayedCandidates = candidates;
+  }
+
+  if (unplayedCandidates.length === 0) {
     const category = mode.category === 'adult' ? 'adult' : 'family';
     const list = OFFLINE_CHALLENGES[type][category];
     const text = list[Math.floor(Math.random() * list.length)];
+    const target = chooseTarget(player, otherPlayers, allowedPairings);
     return {
       id: 'fallback_' + Math.random(),
       type,
-      text: `${player.name}, ${text}`,
+      text: `${player.name}: ${text}`,
       intensity,
       punishment: getPunishment(mode, intensity, isTwoPlayers ? target.name : undefined),
-      timer: 0,
+      timer: extractDynamicTimer(text, 0),
       isFallback: true,
     };
   }
 
-  const row = stackMap[stackKey].pop()!;
-  let finalText: string = row.text || '';
+  const selected = unplayedCandidates[Math.floor(Math.random() * unplayedCandidates.length)];
+  sessionUsedChallenges.add(normalizeKey(selected.text));
+
+  const target = chooseTarget(player, otherPlayers, allowedPairings);
+  let finalText: string = selected.text || '';
 
   if (otherPlayers.length > 0) {
     if (isTwoPlayers) {
@@ -239,10 +344,12 @@ export async function fetchChallenge(
   }
   finalText = finalText.replace(/\{player\}/g, player.name);
 
-  // If the text does not already address the player by name, prefix it cleanly
   if (finalText.length > 0 && !finalText.toLowerCase().includes(player.name.toLowerCase())) {
     finalText = `${player.name}: ${finalText}`;
   }
+
+  // Extracción dinámica del temporizador para sincronizar al 100% con los segundos del texto
+  const calculatedTimer = extractDynamicTimer(finalText, selected.timer || 0);
 
   return {
     id: 'local_' + Math.random().toString(36).substring(2, 9),
@@ -250,10 +357,10 @@ export async function fetchChallenge(
     text: finalText || 'Continúa explorando...',
     intensity,
     punishment: getPunishment(mode, intensity, isTwoPlayers ? target.name : undefined),
-    timer: row.timer || 0,
+    timer: calculatedTimer,
   };
 }
 
 export function clearCache() {
-  Object.keys(stackMap).forEach((k) => delete stackMap[k]);
+  sessionUsedChallenges.clear();
 }
